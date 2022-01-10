@@ -32,15 +32,19 @@ int curr_file_content_idx = -1;
 
 void add_dir( const char *dir_name )
 {
+        printf("-----------------------\nadd_dir\n\n");
 	curr_dir_idx++;
 	strcpy( dir_list[ curr_dir_idx ], dir_name );
 }
 
 int is_dir( const char *path )
 {
+        printf("-----------------------\nis_dir\n\n");
 	path++; // Eliminating "/" in the path
+
+        int curr_idx;
 	
-	for ( int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
+	for ( curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
 		if ( strcmp( path, dir_list[ curr_idx ] ) == 0 )
 			return 1;
 	
@@ -49,6 +53,7 @@ int is_dir( const char *path )
 
 void add_file( const char *filename )
 {
+        printf("-----------------------\nadd_file\n\n");
 	curr_file_idx++;
 	strcpy( files_list[ curr_file_idx ], filename );
 	
@@ -58,9 +63,12 @@ void add_file( const char *filename )
 
 int is_file( const char *path )
 {
+        printf("-----------------------\nis_file\n\n");
 	path++; // Eliminating "/" in the path
+        
+        int curr_idx;
 	
-	for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
+	for ( curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
 		if ( strcmp( path, files_list[ curr_idx ] ) == 0 )
 			return 1;
 	
@@ -70,8 +78,23 @@ int is_file( const char *path )
 int get_file_index( const char *path )
 {
 	path++; // Eliminating "/" in the path
+        
+        int curr_idx;
 	
-	for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
+	for ( curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
+		if ( strcmp( path, files_list[ curr_idx ] ) == 0 )
+			return curr_idx;
+	
+	return -1;
+}
+
+int get_dir_index( const char *path )
+{
+	path++; // Eliminating "/" in the path
+        
+        int curr_idx;
+	
+	for ( curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
 		if ( strcmp( path, files_list[ curr_idx ] ) == 0 )
 			return curr_idx;
 	
@@ -118,23 +141,36 @@ static int do_getattr( const char *path, struct stat *st )
 
 static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi )
 {
-	filler( buffer, ".", NULL, 0 ); // Current Directory
+    	printf("-----------------------\nread_dir\n\n");
+        printf("path is %s\n", path);
+        printf("offset is %lld\n", offset);
+        int path_index = get_file_index(path);
+        printf("path_index is %d\n", path_index);
+         
+        filler( buffer, ".", NULL, 0 ); // Current Directory
 	filler( buffer, "..", NULL, 0 ); // Parent Directory
+        
 	
 	if ( strcmp( path, "/" ) == 0 ) // If the user is trying to show the files/directories of the root directory show the following
 	{
-		for ( int curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
+
+                int curr_idx;
+		
+                for ( curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
 			filler( buffer, dir_list[ curr_idx ], NULL, 0 );
 	
-		for ( int curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
+		for ( curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
 			filler( buffer, files_list[ curr_idx ], NULL, 0 );
 	}
 	
-	return 0;
+	return 0; 
+
 }
 
 static int do_read( const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *fi )
 {
+        printf("-----------------------\nread\n\n");
+
 	int file_idx = get_file_index( path );
 	
 	if ( file_idx == -1 )
@@ -149,7 +185,10 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 
 static int do_mkdir( const char *path, mode_t mode )
 {
-	path++;
+        printf("-----------------------\nmkdir\n\n");
+	printf("path is %s\n", path);
+        path++;
+        printf("path is %s\n", path);
 	add_dir( path );
 	
 	return 0;
@@ -157,6 +196,7 @@ static int do_mkdir( const char *path, mode_t mode )
 
 static int do_mknod( const char *path, mode_t mode, dev_t rdev )
 {
+        printf("-----------------------\nmknod\n\n");
 	path++;
 	add_file( path );
 	
@@ -170,6 +210,37 @@ static int do_write( const char *path, const char *buffer, size_t size, off_t of
 	return size;
 }
 
+static int do_rmdir( const char *path)
+{
+        printf("-----------------------\nrmdir\n\n");
+	int dir_index = get_dir_index( path );
+
+	int curr_idx;
+		
+        for ( curr_idx = dir_index+1; curr_idx < curr_dir_idx; curr_idx++ )
+		strcpy( dir_list[ curr_idx-1 ], dir_list[ curr_idx ]);
+
+	curr_dir_idx--;
+	return 0;
+}
+
+static int do_unlink( const char *path)
+{
+        printf("-----------------------\nunlink\n\n");
+        if ( is_file(path) ){
+
+		int file_index = get_file_index( path );
+	
+		int curr_idx;
+			
+	        for ( curr_idx = file_index+1; curr_idx < curr_file_idx; curr_idx++ )
+			strcpy( dir_list[ curr_idx-1 ], dir_list[ curr_idx ]);
+	
+		curr_file_idx--;
+	}
+	return 0;
+}
+
 static struct fuse_operations operations = {
     .getattr	= do_getattr,
     .readdir	= do_readdir,
@@ -177,9 +248,13 @@ static struct fuse_operations operations = {
     .mkdir		= do_mkdir,
     .mknod		= do_mknod,
     .write		= do_write,
+    .rmdir              = do_rmdir,
+    .unlink             = do_unlink,
 };
 
 int main( int argc, char *argv[] )
-{
+{       
+
+        printf("=======================\n");
 	return fuse_main( argc, argv, &operations, NULL );
 }
