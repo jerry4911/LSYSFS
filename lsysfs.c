@@ -27,7 +27,7 @@ struct file{
 	char name[256];
 	time_t atime;
 	time_t mtime;
-	int parent_dir_index;
+	int parent_index;
 
 };
 
@@ -42,6 +42,8 @@ int curr_file_idx = -1;
 char files_content[ 256 ][ 256 ];
 int curr_file_content_idx = -1;
 
+int cur_path_index = -1;
+
 void add_dir( const char *dir_name )
 {
         printf("-----------------------\nadd_dir\n\n");
@@ -49,6 +51,7 @@ void add_dir( const char *dir_name )
 	strcpy( dir_list[ curr_dir_idx ].name, dir_name );
 	dir_list[ curr_dir_idx ].atime = time( NULL );
 	dir_list[ curr_dir_idx ].mtime = time( NULL );
+	dir_list[ curr_dir_idx ].parent_index = cur_path_index;
 
 }
 
@@ -77,6 +80,7 @@ void add_file( const char *filename )
 
 	files_list[ curr_file_idx ].atime = time( NULL );
 	files_list[ curr_file_idx ].mtime = time( NULL );
+	files_list[ curr_dir_idx ].parent_index = cur_path_index;
 }
 
 int is_file( const char *path )
@@ -113,7 +117,7 @@ int get_dir_index( const char *path )
         int curr_idx;
 	
 	for ( curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ )
-		if ( strcmp( path, files_list[ curr_idx ].name ) == 0 )
+		if ( strcmp( path, dir_list[ curr_idx ].name ) == 0 )
 			return curr_idx;
 	
 	return -1;
@@ -135,6 +139,7 @@ void write_to_file( const char *path, const char *new_content )
 
 static int do_getattr( const char *path, struct stat *st )
 {
+	printf("path: %s\n", path );
 	st->st_uid = getuid(); // The owner of the file/directory is the user who mounted the filesystem
 	st->st_gid = getgid(); // The group of the file/directory is the same as the group of the user who mounted the filesystem
         if ( get_file_index( path ) == -1 ){
@@ -183,14 +188,12 @@ static int do_getattr( const char *path, struct stat *st )
 static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi )
 {
     	printf("-----------------------\nread_dir\n\n");
-        printf("path is %s\n", path );
-        printf("offset is %lld\n", offset );
-        int path_index = get_dir_index( path );
-        printf("path_index is %d\n", path_index );
+        cur_path_index = get_dir_index( path  );
+        printf("%s --> index is %d\n",path, cur_path_index );
          
         filler( buffer, ".", NULL, 0 ); // Current Directory
 	filler( buffer, "..", NULL, 0 ); // Parent Directory
-        
+        /*
 	
 	if ( strcmp( path, "/" ) == 0 ) // If the user is trying to show the files/directories of the root directory show the following
 	{
@@ -203,6 +206,30 @@ static int do_readdir( const char *path, void *buffer, fuse_fill_dir_t filler, o
 		for ( curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ )
 			filler( buffer, files_list[ curr_idx ].name, NULL, 0 );
 	}
+	else{*/
+		int curr_idx;
+		printf("len: %d", sizeof(path) );
+
+		for ( curr_idx = 0; curr_idx <= curr_dir_idx; curr_idx++ ){
+			if ( dir_list[ curr_idx ].parent_index == cur_path_index ){
+				char tmp[sizeof(dir_list[ curr_idx ].name)] = {'/'};
+				memcpy( tmp+1, dir_list[ curr_idx ].name, sizeof(dir_list[ curr_idx ].name));
+				filler( buffer, dir_list[ curr_idx ].name, NULL, 0 );
+				printf( "-->%s\n", dir_list[ curr_idx ].name + sizeof( path )-1 );
+				printf( "Original-->%s\n", dir_list[ curr_idx ].name);
+				printf( "TMP-->%s\n", tmp );
+
+			}
+		
+		}
+
+		for ( curr_idx = 0; curr_idx <= curr_file_idx; curr_idx++ ){
+			if ( files_list[ curr_idx ].parent_index == cur_path_index )
+				filler( buffer, files_list[ curr_idx ].name, NULL, 0 );
+		
+		}
+	
+	//}
 	
 	return 0; 
 
@@ -227,7 +254,6 @@ static int do_read( const char *path, char *buffer, size_t size, off_t offset, s
 static int do_mkdir( const char *path, mode_t mode )
 {
         printf("-----------------------\nmkdir\n\n");
-	printf("path is %s\n", path);
         path++;
         printf("path is %s\n", path);
 	add_dir( path );
